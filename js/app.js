@@ -10,6 +10,7 @@ import { celebrate } from './confetti.js';
 const loaded = load();
 let data = loaded.data;
 let storageError = loaded.error;
+if (!storageError) save(data); // store any migration (e.g. new default exercises) right away
 let tab = 'today';
 let todayKey = toDateKey();
 let historyMonth = todayKey.slice(0, 7); // "YYYY-MM"
@@ -97,7 +98,38 @@ function renderToday() {
       </div>
     </section>
     ${hint}
+    ${renderDaily(todayKey)}
     ${renderDay(todayKey)}`;
+}
+
+// Daily plan: every active exercise logged at least once, plus a stretch.
+function dailyProgress(date) {
+  const logged = new Set(entriesOn(date).map((e) => e.exerciseId));
+  const active = data.exercises.filter((e) => !e.archived);
+  const done = active.filter((e) => logged.has(e.id)).length;
+  const stretched = !!dayInfo(date).stretched;
+  return { done, total: active.length, stretched, complete: active.length > 0 && done === active.length && stretched };
+}
+
+function renderDaily(date) {
+  const p = dailyProgress(date);
+  if (!p.total) return '';
+  const items = p.total + 1;
+  const pct = Math.round(((p.done + (p.stretched ? 1 : 0)) / items) * 100);
+  return `<section class="card daily" aria-label="Daily plan">
+      <div class="daily-row">
+        <span>${p.complete ? '<b>All done for today</b> 💪' : `Exercises <b>${p.done}/${p.total}</b> · Stretch <b>${p.stretched ? '✓' : '–'}</b>`}</span>
+        <span class="muted small">${pct}%</span>
+      </div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+    </section>`;
+}
+
+function celebrateIfComplete(date, wasComplete) {
+  if (date !== todayKey || wasComplete || !dailyProgress(date).complete) return false;
+  celebrate({ big: true });
+  toast('💪 All done for today!', 3000);
+  return true;
 }
 
 function renderDay(date) {
@@ -364,6 +396,7 @@ function openLogSheet({ exerciseId, date, entryId }) {
     } else {
       const before = computeStats(data, todayKey);
       const firstOfDay = entriesOn(logDate).length === 0;
+      const wasComplete = dailyProgress(logDate).complete;
       data.entries.push({ id: newId(), date: logDate, exerciseId: ex.id, ...entry, createdAt: Date.now() });
       persist();
       const after = computeStats(data, todayKey);
@@ -371,6 +404,8 @@ function openLogSheet({ exerciseId, date, entryId }) {
       if (milestone) {
         celebrate({ big: true });
         toast(`🏅 ${milestone}-day streak! New badge earned.`, 3500);
+      } else if (celebrateIfComplete(logDate, wasComplete)) {
+        // daily plan finished
       } else if (firstOfDay && logDate === todayKey) {
         celebrate();
         toast(after.currentStreak > 1 ? `🔥 ${after.currentStreak}-day streak!` : '🔥 Streak started!');
@@ -575,9 +610,10 @@ sheet.addEventListener('submit', (e) => {
 view.addEventListener('change', (e) => {
   const el = e.target;
   if (el.dataset.action === 'stretch') {
+    const wasComplete = dailyProgress(el.dataset.date).complete;
     setDay(el.dataset.date, { stretched: el.checked, ...(el.checked ? {} : { stretchMinutes: null }) });
     render();
-    if (el.checked) toast('Stretch logged');
+    if (el.checked && !celebrateIfComplete(el.dataset.date, wasComplete)) toast('Stretch logged');
   }
 });
 

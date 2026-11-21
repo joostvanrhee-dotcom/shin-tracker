@@ -6,6 +6,17 @@ A small offline web app for logging shin and calf strengthening exercises on an 
 - All data stays on your device in `localStorage` (key `shinTracker.v1`). No accounts, no analytics, no external requests.
 - Works offline after the first visit (service worker).
 
+## Daily routine
+
+The app comes set up for one daily routine: three exercises plus a stretch.
+
+1. **Standing calf raises**: straight knees, rise high onto your toes, lower slowly.
+2. **Bent-knee calf raises**: knees bent (works the soleus), rise and lower with control.
+3. **Band ankle eversion** (seated resisted ankle eversion): sit on a chair with a band over the top of your feet, keep your heel on the floor and turn your foot outward, then return slowly.
+4. **Stretch**.
+
+The Today screen shows how much of the routine is done, and celebrates when all four are done. You can still add, edit or archive exercises in Settings.
+
 ## Screens
 
 - **Today**: streak and best streak, your exercises (tap to log, prefilled with last time's values), a "Stretched today" toggle with optional minutes, and notes for the day.

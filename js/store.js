@@ -10,20 +10,47 @@ export const TYPES = {
 };
 
 export const DEFAULT_EXERCISES = [
-  { id: 'tibialis-raises', name: 'Tibialis raises', howto: 'Back against a wall, heels a foot out: lift your toes high, lower slowly.', type: 'reps', weighted: true },
-  { id: 'heel-walks', name: 'Heel walks', howto: 'Walk on your heels with your toes pulled up high.', type: 'time' },
-  { id: 'toe-walks', name: 'Toe walks', howto: 'Walk tall on the balls of your feet, heels lifted.', type: 'time' },
-  { id: 'band-dorsiflexion', name: 'Resistance band dorsiflexion', howto: 'Band over the top of your foot: pull your toes toward your shin.', type: 'reps' },
-  { id: 'eccentric-calf-raises', name: 'Eccentric calf raises', howto: 'Rise up, then lower slowly over 3–4 seconds.', type: 'reps', weighted: true },
-  { id: 'soleus-calf-raises', name: 'Bent-knee (soleus) calf raises', howto: 'Knees bent, rise onto your toes and lower with control.', type: 'reps', weighted: true },
-  { id: 'single-leg-calf-raises', name: 'Single-leg calf raises', howto: 'On one foot: full range up, all the way down.', type: 'reps' },
-  { id: 'ankle-circles', name: 'Ankle circles / alphabet', howto: 'Trace circles or the alphabet with your toes, each foot.', type: 'reps' },
-  { id: 'foam-rolling-calves', name: 'Foam rolling calves', howto: 'Roll slowly from ankle to knee, pause on tight spots.', type: 'duration' },
+  { id: 'standing-calf-raises', name: 'Standing calf raises', howto: 'Straight knees: rise high onto your toes, lower slowly all the way down.', type: 'reps', weighted: true },
+  { id: 'soleus-calf-raises', name: 'Bent-knee calf raises', howto: 'Knees bent: rise onto your toes and lower with control.', type: 'reps', weighted: true },
+  { id: 'band-ankle-eversion', name: 'Band ankle eversion', howto: 'Seated, band over the top of your feet: heel down, turn your foot outward, return slowly.', type: 'reps' },
 ].map((e) => ({ weighted: false, archived: false, ...e }));
+
+// Bump when the default exercise list changes; older data is migrated in migrateExercises().
+export const SETUP_VERSION = 2;
+
+// Exercises that were defaults in setup version 1.
+const V1_DEFAULT_IDS = new Set(['tibialis-raises', 'heel-walks', 'toe-walks', 'band-dorsiflexion', 'eccentric-calf-raises',
+  'soleus-calf-raises', 'single-leg-calf-raises', 'ankle-circles', 'foam-rolling-calves']);
+
+/**
+ * Switch data created with the old default list to the current one:
+ * old defaults without history are removed, old defaults with history are archived
+ * (so History still shows them), custom exercises are kept, and the current
+ * defaults are put first.
+ */
+export function migrateExercises(exercises, entries) {
+  const used = new Set(entries.map((e) => e.exerciseId));
+  const currentIds = new Set(DEFAULT_EXERCISES.map((e) => e.id));
+  const kept = [];
+  for (const ex of exercises) {
+    if (currentIds.has(ex.id)) continue; // re-added below with current name and how-to
+    if (V1_DEFAULT_IDS.has(ex.id)) {
+      if (used.has(ex.id)) kept.push({ ...ex, archived: true });
+    } else {
+      kept.push(ex);
+    }
+  }
+  const defaults = DEFAULT_EXERCISES.map((d) => {
+    const old = exercises.find((e) => e.id === d.id);
+    return { ...d, weighted: old ? old.weighted || d.weighted : d.weighted };
+  });
+  return [...defaults, ...kept];
+}
 
 export function defaultData() {
   return {
     version: DATA_VERSION,
+    setupVersion: SETUP_VERSION,
     exercises: DEFAULT_EXERCISES.map((e) => ({ ...e })),
     entries: [],
     days: {},
@@ -48,7 +75,7 @@ export function normalize(raw) {
   if (raw.version !== DATA_VERSION) throw new Error(`Unsupported data version: ${raw.version}`);
   if (!Array.isArray(raw.exercises) || !Array.isArray(raw.entries)) throw new Error('Backup is missing exercises or entries.');
 
-  const exercises = [];
+  let exercises = [];
   const seen = new Set();
   for (const e of raw.exercises) {
     if (!e || typeof e.id !== 'string' || seen.has(e.id) || typeof e.name !== 'string') continue;
@@ -79,6 +106,12 @@ export function normalize(raw) {
     });
   }
 
+  if (raw.setupVersion !== SETUP_VERSION) {
+    exercises = migrateExercises(exercises, entries);
+    seen.clear();
+    for (const ex of exercises) seen.add(ex.id);
+  }
+
   // Entries whose exercise is missing get a placeholder (archived) exercise so history stays readable.
   for (const e of entries) {
     if (!seen.has(e.exerciseId)) {
@@ -102,6 +135,7 @@ export function normalize(raw) {
 
   return {
     version: DATA_VERSION,
+    setupVersion: SETUP_VERSION,
     exercises,
     entries,
     days,
