@@ -1,5 +1,5 @@
 // Offline support. Bump VERSION whenever app files change.
-const VERSION = 'v2';
+const VERSION = 'v3';
 const CACHE = `shin-tracker-${VERSION}`;
 const ASSETS = [
   './',

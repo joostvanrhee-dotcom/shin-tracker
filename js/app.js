@@ -11,6 +11,10 @@ const loaded = load();
 let data = loaded.data;
 let storageError = loaded.error;
 if (!storageError) save(data); // store any migration (e.g. new default exercises) right away
+// iOS exposes navigator.standalone: false in a Safari tab, true when launched from the home-screen icon.
+const inIosSafariTab = navigator.standalone === false && !window.matchMedia?.('(display-mode: standalone)').matches;
+// Ask the browser not to evict our storage under pressure (best effort, no prompt on iOS).
+navigator.storage?.persist?.().catch(() => {});
 let tab = 'today';
 let todayKey = toDateKey();
 let historyMonth = todayKey.slice(0, 7); // "YYYY-MM"
@@ -75,7 +79,10 @@ function render() {
     else b.removeAttribute('aria-current');
   });
   $('.tab-dot').hidden = !needsBackup();
-  const banner = storageError ? `<div class="error-banner">${esc(storageError)}</div>` : '';
+  let banner = storageError ? `<div class="error-banner">${esc(storageError)}</div>` : '';
+  if (inIosSafariTab && tab === 'today') {
+    banner += `<div class="notice"><b>You're in Safari, not the app.</b> Logs saved here stay in Safari and won't show up in the home-screen app (and vice versa). Tap Share › Add to Home Screen, then always log from the icon. To move logs already made here, use Settings › Export here and Import in the app.</div>`;
+  }
   const html = { today: renderToday, history: renderHistory, progress: renderProgress, settings: renderSettings }[tab]();
   view.innerHTML = banner + html;
 }
